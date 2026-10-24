@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  base: '/surya-dian-wedding/',
   plugins: [react()],
   server: {
     host: '0.0.0.0',

@@ -3,6 +3,8 @@ import { ASSET_MAP } from './data/assetMap.js';
 
 const WEDDING_DATE = new Date('2026-11-29T13:00:00+07:00');
 const RSVP_OPTIONS = ['Hadir', 'Tidak Hadir', 'Belum Bisa Memastikan'];
+const RSVP_STORAGE_KEY = 'surya-dian-rsvp';
+const GUESTBOOK_STORAGE_KEY = 'surya-dian-guestbook';
 
 function getGuestNameFromQuery() {
   if (typeof window === 'undefined') return 'Tamu Undangan';
@@ -33,6 +35,24 @@ function toTitleCase(value) {
     .join(' ');
 }
 
+function readLocalStorage(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writeLocalStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn('Local storage unavailable:', error);
+  }
+}
+
 function AssetImage({ src, alt, className, label, fallbackClass = '' }) {
   const [broken, setBroken] = useState(false);
 
@@ -59,7 +79,6 @@ function App() {
   const [guestName, setGuestName] = useState('Tamu Undangan');
   const [coverOpen, setCoverOpen] = useState(false);
   const [musicPlaying, setMusicPlaying] = useState(false);
-  const [musicAvailable, setMusicAvailable] = useState(true);
   const [countdown, setCountdown] = useState(formatCountdown(WEDDING_DATE));
   const [selectedStatus, setSelectedStatus] = useState('Hadir');
   const [guestCount, setGuestCount] = useState(1);
@@ -107,7 +126,6 @@ function App() {
     audio.volume = 0.32;
     audio.preload = 'none';
     audio.addEventListener('error', () => {
-      setMusicAvailable(false);
       setMusicError('Audio undangan belum tersedia di perangkat ini.');
     });
     audio.addEventListener('ended', () => {
@@ -130,12 +148,13 @@ function App() {
 
   const fetchGuestbook = async () => {
     try {
-      const response = await fetch('/api/guestbook');
-      if (!response.ok) return;
+      const response = await fetch(`${import.meta.env.BASE_URL}api/guestbook`);
+      if (!response.ok) throw new Error('Guestbook fetch failed');
       const data = await response.json();
       setGuestbookEntries(data || []);
     } catch (error) {
-      console.error('Failed to load guestbook:', error);
+      const localEntries = readLocalStorage(GUESTBOOK_STORAGE_KEY, []);
+      setGuestbookEntries(localEntries || []);
     }
   };
 
@@ -147,7 +166,6 @@ function App() {
       try {
         await audio.play();
         setMusicPlaying(true);
-        setMusicAvailable(true);
       } catch (error) {
         setMusicPlaying(false);
         setMusicError('Browser memblokir autoplay. Tekan tombol musik untuk mulai.');
@@ -189,7 +207,7 @@ function App() {
     };
 
     try {
-      const response = await fetch('/api/rsvp', {
+      const response = await fetch(`${import.meta.env.BASE_URL}api/rsvp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -197,16 +215,40 @@ function App() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.message || 'RSVP gagal dikirim');
+        throw new Error('RSVP gagal dikirim');
       }
 
       setRsvpSaved(true);
       setRsvpMessage('');
       await fetchGuestbook();
     } catch (error) {
-      setRsvpFormError(error.message || 'Terjadi kesalahan saat mengirim RSVP.');
+      const previous = readLocalStorage(RSVP_STORAGE_KEY, []);
+      const record = {
+        id: `${Date.now()}`,
+        name: guestName,
+        status: selectedStatus,
+        guestCount,
+        message: rsvpMessage.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      const next = [...previous, record];
+      writeLocalStorage(RSVP_STORAGE_KEY, next);
+
+      const guestbook = readLocalStorage(GUESTBOOK_STORAGE_KEY, []);
+      if (rsvpMessage.trim()) {
+        const messageEntry = {
+          id: `${Date.now()}-message`,
+          name: guestName,
+          message: rsvpMessage.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        writeLocalStorage(GUESTBOOK_STORAGE_KEY, [...guestbook, messageEntry]);
+      }
+
+      setGuestbookEntries(readLocalStorage(GUESTBOOK_STORAGE_KEY, []));
+      setRsvpSaved(true);
+      setRsvpMessage('');
     } finally {
       setIsSubmitting(false);
     }
