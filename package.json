@@ -1,0 +1,25 @@
+{
+  "name": "surya-dian-wedding",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm:server\" \"vite\"",
+    "server": "node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "start": "NODE_ENV=production node server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "concurrently": "^9.0.1",
+    "vite": "^5.4.8"
+  }
+}
